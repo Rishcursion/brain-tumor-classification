@@ -1,8 +1,0 @@
-[2025-01-11 16:25:56.234] [info] Using configuration file /home/wizard/.config/waybar/config.jsonc
-[2025-01-11 16:25:56.235] [info] Unable to receive desktop appearance: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name is not activatable
-[2025-01-11 16:25:56.235] [info] Using CSS file /home/wizard/.config/waybar/style.css
-[2025-01-11 16:25:56.238] [info] Hyprland IPC starting
-[2025-01-11 16:25:56.239] [info] Loading persistent workspaces from Hyprland workspace rules
-[2025-01-11 16:25:56.295] [warning] Requested height: 30 is less than the minimum height: 49 required by the modules
-[2025-01-11 16:25:56.295] [info] Bar configured (width: 1600, height: 49) for output: eDP-1
-[2025-01-11 16:26:00.666] [info] Quitting.
