@@ -1,5 +1,5 @@
 # Tumor Classification:
-This project aims to classify tumors based on MRI scans from the [Brain Tumor MRI Dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset). This project is also for me to understand how to leverage modern computer vision libraries to apply what i have learned in theory to practice.
+This project aims to classify and segment tumors based on MRI scans from the [Brain Tumor MRI Dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset). This project is also for me to understand how to leverage modern computer vision libraries to apply what i have learned in theory to practice.
 Multiple pre-trained models will be utilized for the dataset for comparison.
 # TODO:
 - |  / |  Data Exploration and Visualization.
