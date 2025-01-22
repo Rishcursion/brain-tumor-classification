@@ -1,4 +1,4 @@
-# General Imports
+# General Imports import time
 import time
 from typing import Any
 
@@ -81,7 +81,7 @@ def fitModel(
     optimizer: optim.Optimizer,
     criterion: _Loss,
     numIters: int = 15,
-) -> nn.Module:
+) -> tuple[nn.Module, dict[str, dict[str, Any]]]:
     """
     The training loop for the EfficientNet_B2 model that utilizes user-defined optimizer
     and loss criterion to perform weight updates of the outer layer and provide statistics.
@@ -97,6 +97,10 @@ def fitModel(
     model.cuda()
     bestAcc = 0.0
     startTime = time.time()
+    Metrics = {
+        "Training": {"Loss": [], "Accuracy": []},
+        "Validating": {"Loss": [], "Accuracy": []},
+    }
     for epoch in range(numIters):
         epochTime = time.time()
         for phase in ["Training", "Validating"]:
@@ -126,7 +130,8 @@ def fitModel(
                 runningCorrect += torch.sum(yHats == labels)
             epochLoss = runningLoss / batchDataSet[phase][1]
             epochAcc = runningCorrect / batchDataSet[phase][1]
-
+            Metrics[phase]["Loss"].append(epochLoss)
+            Metrics[phase]["Accuracy"].append(epochAcc)
             if phase == "Validating" and epochAcc > bestAcc:
                 bestAcc = epochAcc
                 torch.save(model.state_dict(), f"./EfficientNetParams{epoch}.pt")
@@ -140,7 +145,7 @@ def fitModel(
             )
 
     print(f"Total Time Taken: {(time.time() - startTime)/60:.2f} Minutes")
-    return model
+    return model, Metrics
 
 
 if __name__ == "__main__":
@@ -152,4 +157,17 @@ if __name__ == "__main__":
     }
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
     criterion = nn.CrossEntropyLoss()
-    fitModel(model, dataLoaders, optimizer, criterion)
+    model, Metrics = fitModel(model, dataLoaders, optimizer, criterion, 175)
+    trainMetrics, testMetrics = Metrics["Training"], Metrics["Validating"]
+    with open("../statistics/EfficientNetB2Training.csv", "a") as fp:
+        fp.write("Epoch, Loss, Accuracy")
+        epoch = 1
+        for metric in trainMetrics.keys():
+            fp.write(f"{epoch},{trainMetrics[metric]}, {trainMetrics[metric]}")
+            epoch += 1
+    with open("../statistics/EfficientNetB2Validation.csv", "a") as fp:
+        fp.write("Epoch, Loss, Accuracy")
+        epoch = 1
+        for metric in trainMetrics.keys():
+            fp.write(f"{epoch},{testMetrics[metric]}, {testMetrics[metric]}")
+            epoch += 1
