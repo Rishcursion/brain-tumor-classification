@@ -2,28 +2,22 @@
 import time
 from typing import Any
 
+# Pytorch Imports
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision
-from torch._dynamo import optimize
-from torch.cuda import device_count
 from torch.nn.modules.loss import _Loss
-from torch.types import Tensor
 from torch.utils.data import DataLoader
 from torchvision.models import EfficientNet_B2_Weights, efficientnet_b2
 
-from dataset.torchData import torchData
-
-# Pytorch Imports
-
+from dataset.torchData import torchData as torch_data
 
 # Global variables
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 # Utility Functions
-def getDataLoader(
+def get_data_loader(
     subset: str, transforms=None, batchSize: int = 16
 ) -> tuple[DataLoader, int]:
     """
@@ -35,52 +29,52 @@ def getDataLoader(
     :return: A dataLoader object that can be iterated through when training the
              model.
     """
-    dataSet = torchData(subset, transform=transforms)
-    return DataLoader(dataSet, batch_size=batchSize, shuffle=True), len(dataSet)
+    data_set = torch_data(subset, transform=transforms)
+    return DataLoader(data_set, batch_size=batchSize, shuffle=True), len(data_set)
 
 
-def initWeights(m):
+def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
 
-def modelInit() -> tuple:
+def model_init() -> tuple:
     """
     Initializes the EfficientNet_B2 model with the corresponding weights.
 
     :return: A torch.nn.Module neural network with pretrained weights.
     """
-    efficientModel = efficientnet_b2(EfficientNet_B2_Weights.DEFAULT)
-    efficientTransforms = EfficientNet_B2_Weights.DEFAULT.transforms()
+    efficient_model = efficientnet_b2(EfficientNet_B2_Weights.DEFAULT)
+    efficient_transforms = EfficientNet_B2_Weights.DEFAULT.transforms()
     # Sending the intialized model to the specified Processing Unit.
-    efficientModel.to(device)
+    efficient_model.to(device)
     # Freezing the base layers of the pretrained model to prevent updating
     # weights during training
-    for param in efficientModel.parameters():
+    for param in efficient_model.parameters():
         param.requires_grad = False
-    # Modifying the output layer to have 4 outputs instead of the 1000 output neurons.
-    efficientModel.classifier = nn.Sequential(
+    # Modifying the output layer Gto have 4 outputs instead of the 1000 output neurons.
+    efficient_model.classifier = nn.Sequential(
         nn.Dropout(p=0.3, inplace=True),
         nn.Linear(in_features=1408, out_features=4, bias=True),
     )
     # Unfreezing the last 2 layers
-    for param in efficientModel.features[-2:].parameters():
+    for param in efficient_model.features[-2:].parameters():
         param.requires_grad = True
-    for param in efficientModel.classifier.parameters():
+    for param in efficient_model.classifier.parameters():
         param.requires_grad = True
     # Initializing the weights of the new layer using the Xavier Uniform Distribution.
-    efficientModel.apply(initWeights)
-    print(efficientTransforms)
-    return efficientModel, efficientTransforms
+    efficient_model.apply(init_weights)
+    print(efficient_transforms)
+    return efficient_model, efficient_transforms
 
 
-def fitModel(
+def fit_model(
     model: nn.Module,
-    batchDataSet: dict[str, tuple[DataLoader, int]],
+    batch_data_set: dict[str, tuple[DataLoader, int]],
     optimizer: optim.Optimizer,
     criterion: _Loss,
-    numIters: int = 15,
+    num_iters: int = 15,
 ) -> tuple[nn.Module, dict[str, dict[str, Any]]]:
     """
     The training loop for the EfficientNet_B2 model that utilizes user-defined optimizer
@@ -88,10 +82,10 @@ def fitModel(
 
     :param model: A nn.Module neural network that has defined layers and forward propogation
     defined.
-    :param batchDataSet: Dictionary of all three subsets along with the numeber of images.
+    :param batch_data_set: Dictionary of all three subsets along with the numeber of images.
     :param optimizer: The optimizer to use for updating the weights.
     :param criterion: The error function that returns the loss of the model.
-    :param numIters: The number of epochs to train the model for.
+    :param num_iters: The number of epochs to train the model for.
     :return: A trained model with updated weights.
     """
     model.cuda()
@@ -101,46 +95,46 @@ def fitModel(
         "Training": {"Loss": [], "Accuracy": []},
         "Validating": {"Loss": [], "Accuracy": []},
     }
-    for epoch in range(numIters):
-        epochTime = time.time()
+    for epoch in range(num_iters):
+        epoch_time = time.time()
         for phase in ["Training", "Validating"]:
-            print(f"\nStarting Epoch: {epoch}/{numIters}\nPhase: {phase}\n")
+            print(f"\nStarting Epoch: {epoch}/{num_iters}\nPhase: {phase}\n")
             # Setting to Training Mode
             model.train(phase == "Training")
             # Initializing statistics variables
-            runningLoss = torch.tensor(0.0, device=device)
-            runningCorrect = torch.tensor(0, device=device)
-            for images, labels in batchDataSet[phase][0]:
+            running_loss = torch.tensor(0.0, device=device)
+            running_correct = torch.tensor(0, device=device)
+            for images, labels in batch_data_set[phase][0]:
                 images = images.to(device)
                 labels = labels.to(device)
                 optimizer.zero_grad()
                 # Track predictions if in training phase otherwise just make predictions.
                 with torch.set_grad_enabled(phase == "Training"):
-                    classProbabilities = model(images)
-                    classProbabilities.to(device)
+                    class_probabilities = model(images)
+                    class_probabilities.to(device)
                     yHats = torch.argmax(
-                        torch.softmax(classProbabilities, dim=1), dim=1
+                        torch.softmax(class_probabilities, dim=1), dim=1
                     )
-                    loss = criterion(classProbabilities, labels)
+                    loss = criterion(class_probabilities, labels)
                     if phase == "Training":
                         loss.backward()
                         optimizer.step()
 
-                runningLoss += loss.item() * images.size(0)
-                runningCorrect += torch.sum(yHats == labels)
-            epochLoss = runningLoss / batchDataSet[phase][1]
-            epochAcc = runningCorrect / batchDataSet[phase][1]
-            Metrics[phase]["Loss"].append(epochLoss)
-            Metrics[phase]["Accuracy"].append(epochAcc)
-            if phase == "Validating" and epochAcc > bestAcc:
-                bestAcc = epochAcc
+                running_loss += loss.item() * images.size(0)
+                running_correct += torch.sum(yHats == labels)
+            epoch_loss = running_loss / batch_data_set[phase][1]
+            epoch_accuracy = running_correct / batch_data_set[phase][1]
+            Metrics[phase]["Loss"].append(epoch_loss)
+            Metrics[phase]["Accuracy"].append(epoch_accuracy)
+            if phase == "Validating" and epoch_accuracy > bestAcc:
+                bestAcc = epoch_accuracy
                 torch.save(model.state_dict(), f"./EfficientNetParams{epoch}.pt")
             print(
                 f"""{'='*30}
-                  Finished Epoch: {epoch}/{numIters}
-                  Time Taken: {(time.time()-epochTime)/60:.2f} Minutes
-                  Current Loss: {epochLoss:.4f}
-                  Current Accuracy: {epochAcc*100:.2f}%
+                  Finished Epoch: {epoch}/{num_iters}
+                  Time Taken: {(time.time()-epoch_time)/60:.2f} Minutes
+                  Current Loss: {epoch_loss:.4f}
+                  Current Accuracy: {epoch_accuracy*100:.2f}%
                   {'='*30}"""
             )
 
@@ -149,25 +143,27 @@ def fitModel(
 
 
 if __name__ == "__main__":
-    model, transforms = modelInit()
-    dataLoaders = {
-        "Training": getDataLoader("Training", transforms),
-        "Testing": getDataLoader("Testing", transforms),
-        "Validating": getDataLoader("Validation", transforms),
+    model, transforms = model_init()
+    data_loaders = {
+        "Training": get_data_loader("Training", transforms),
+        "Testing": get_data_loader("Testing", transforms),
+        "Validating": get_data_loader("Validation", transforms),
     }
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
     criterion = nn.CrossEntropyLoss()
-    model, Metrics = fitModel(model, dataLoaders, optimizer, criterion, 175)
+    model, Metrics = fit_model(model, data_loaders, optimizer, criterion, 10)
     trainMetrics, testMetrics = Metrics["Training"], Metrics["Validating"]
-    with open("../statistics/EfficientNetB2Training.csv", "a") as fp:
-        fp.write("Epoch, Loss, Accuracy")
+    with open("./statistics/EfficientNetB2Training.csv", "a") as fp:
+        fp.write("Epoch, Loss, Accuracy\n")
         epoch = 1
         for metric in trainMetrics.keys():
-            fp.write(f"{epoch},{trainMetrics[metric]}, {trainMetrics[metric]}")
+            fp.write(f"{epoch},{trainMetrics[metric]}\n, {trainMetrics[metric]}\n")
             epoch += 1
-    with open("../statistics/EfficientNetB2Validation.csv", "a") as fp:
-        fp.write("Epoch, Loss, Accuracy")
+    fp.close()
+    with open("./statistics/EfficientNetB2Validation.csv", "a") as fp:
+        fp.write("Epoch, Loss, Accuracy\n")
         epoch = 1
         for metric in trainMetrics.keys():
-            fp.write(f"{epoch},{testMetrics[metric]}, {testMetrics[metric]}")
+            fp.write(f"{epoch},{testMetrics[metric]}, {testMetrics[metric]}\n")
             epoch += 1
+    fp.close()
