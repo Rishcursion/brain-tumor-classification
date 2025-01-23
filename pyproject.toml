@@ -16,6 +16,8 @@ ipywidgets = "^8.1.5"
 torchvision = "^0.20.1"
 pyqt6 = "^6.8.0"
 opencv-python = "^4.11.0.86"
+matplotlib = "^3.10.0"
+kaleido = "0.2.1"
 
 
 [build-system]
