@@ -148,7 +148,15 @@ def plot_gradcam(model, img, label, img_path: str):
     return superimposed_img, y_values
 
 
-def plot_pred_actual(original_image, segmented_image, y_values, label_dict):
+def plot_pred_actual(original_image, segmented_image, y_values, label_dict) -> None:
+    """
+    [TODO:description]
+
+    :param original_image [TODO:type]: [TODO:description]
+    :param segmented_image [TODO:type]: [TODO:description]
+    :param y_values [TODO:type]: [TODO:description]
+    :param label_dict [TODO:type]: [TODO:description]
+    """
     plt.figure(figsize=(10, 10))
     fig, axarr = plt.subplots(1, 2)
     axarr[0].imshow(original_image)

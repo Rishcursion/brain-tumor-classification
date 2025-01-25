@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.nn.modules.loss import _Loss
 from torch.utils.data import DataLoader
+from torchmetrics.classification import ConfusionMatrix
 from torchvision.models import EfficientNet_B2_Weights, efficientnet_b2
 
 from dataset.torchData import torchData as torch_data
@@ -92,8 +93,8 @@ def fit_model(
     bestAcc = 0.0
     startTime = time.time()
     Metrics = {
-        "Training": {"Loss": [], "Accuracy": []},
-        "Validating": {"Loss": [], "Accuracy": []},
+        "Training": {"Loss": [], "Accuracy Metrics": {}},
+        "Validating": {"Loss": [], "Accuracy Metrics": {}},
     }
     for epoch in range(num_iters):
         epoch_time = time.time()
@@ -104,6 +105,8 @@ def fit_model(
             # Initializing statistics variables
             running_loss = torch.tensor(0.0, device=device)
             running_correct = torch.tensor(0, device=device)
+            confmat = ConfusionMatrix(task="multiclass", num_classes=4)
+            confmat.to(device)
             for images, labels in batch_data_set[phase][0]:
                 images = images.to(device)
                 labels = labels.to(device)
@@ -119,13 +122,14 @@ def fit_model(
                     if phase == "Training":
                         loss.backward()
                         optimizer.step()
-
+                confmat(yHats, labels)
                 running_loss += loss.item() * images.size(0)
                 running_correct += torch.sum(yHats == labels)
             epoch_loss = running_loss / batch_data_set[phase][1]
             epoch_accuracy = running_correct / batch_data_set[phase][1]
             Metrics[phase]["Loss"].append(epoch_loss)
-            Metrics[phase]["Accuracy"].append(epoch_accuracy)
+            Metrics[phase]["Accuracy Metrics"]["ConfusionMatrix"] = confmat.compute()
+            Metrics[phase]["Accuracy Metrics"]["Accuracy"] = epoch_accuracy
             if phase == "Validating" and epoch_accuracy > bestAcc:
                 bestAcc = epoch_accuracy
                 torch.save(model.state_dict(), f"./EfficientNetParams{epoch}.pt")
@@ -151,19 +155,8 @@ if __name__ == "__main__":
     }
     optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
     criterion = nn.CrossEntropyLoss()
-    model, Metrics = fit_model(model, data_loaders, optimizer, criterion, 10)
+    epochs = int(input("Enter The Number Of Epochs: "))
+    model, Metrics = fit_model(model, data_loaders, optimizer, criterion, epochs)
     trainMetrics, testMetrics = Metrics["Training"], Metrics["Validating"]
-    with open("./statistics/EfficientNetB2Training.csv", "a") as fp:
-        fp.write("Epoch, Loss, Accuracy\n")
-        epoch = 1
-        for metric in trainMetrics.keys():
-            fp.write(f"{epoch},{trainMetrics[metric]}\n, {trainMetrics[metric]}\n")
-            epoch += 1
-    fp.close()
-    with open("./statistics/EfficientNetB2Validation.csv", "a") as fp:
-        fp.write("Epoch, Loss, Accuracy\n")
-        epoch = 1
-        for metric in trainMetrics.keys():
-            fp.write(f"{epoch},{testMetrics[metric]}, {testMetrics[metric]}\n")
-            epoch += 1
-    fp.close()
+    print(trainMetrics)
+    print(testMetrics)
