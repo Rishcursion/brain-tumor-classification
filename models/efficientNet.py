@@ -1,6 +1,6 @@
 # General Imports import time
 import time
-from typing import Any
+from typing import Any, Literal
 
 # Pytorch Imports
 import torch
@@ -8,7 +8,10 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.nn.modules.loss import _Loss
 from torch.utils.data import DataLoader
-from torchmetrics.classification import ConfusionMatrix
+from torchmetrics.classification import (Accuracy, F1Score, MulticlassAUROC,
+                                         Precision, Specificity)
+from torchmetrics.collections import MetricCollection
+from torchmetrics.wrappers import MetricTracker
 from torchvision.models import EfficientNet_B2_Weights, efficientnet_b2
 
 from dataset.torchData import torchData as torch_data
@@ -70,6 +73,7 @@ def model_init() -> tuple:
     return efficient_model, efficient_transforms
 
 
+# Training Function
 def fit_model(
     model: nn.Module,
     batch_data_set: dict[str, tuple[DataLoader, int]],
@@ -93,20 +97,32 @@ def fit_model(
     bestAcc = 0.0
     startTime = time.time()
     Metrics = {
-        "Training": {"Loss": [], "Accuracy Metrics": {}},
-        "Validating": {"Loss": [], "Accuracy Metrics": {}},
+        "Training": {"Loss": [], "Metrics": []},
+        "Validating": {"Loss": [], "Metrics": []},
     }
+    tracker = MetricTracker(
+        MetricCollection(
+            [
+                Accuracy(task="multiclass", num_classes=4),
+                F1Score(task="multiclass", num_classes=4),
+                MulticlassAUROC(num_classes=4),
+                Specificity(task="multiclass", num_classes=4),
+                Precision(task="multiclass", num_classes=4),
+            ]
+        )
+    )
+    tracker.to(device)
     for epoch in range(num_iters):
+        tracker.increment()
         epoch_time = time.time()
         for phase in ["Training", "Validating"]:
-            print(f"\nStarting Epoch: {epoch}/{num_iters}\nPhase: {phase}\n")
+            print(f"\nStarting Epoch: {epoch+1}/{num_iters}\nPhase: {phase}\n")
             # Setting to Training Mode
             model.train(phase == "Training")
             # Initializing statistics variables
             running_loss = torch.tensor(0.0, device=device)
             running_correct = torch.tensor(0, device=device)
-            confmat = ConfusionMatrix(task="multiclass", num_classes=4)
-            confmat.to(device)
+            # Start batch training
             for images, labels in batch_data_set[phase][0]:
                 images = images.to(device)
                 labels = labels.to(device)
@@ -122,20 +138,19 @@ def fit_model(
                     if phase == "Training":
                         loss.backward()
                         optimizer.step()
-                confmat(yHats, labels)
+                tracker.update(class_probabilities, labels)
                 running_loss += loss.item() * images.size(0)
                 running_correct += torch.sum(yHats == labels)
             epoch_loss = running_loss / batch_data_set[phase][1]
             epoch_accuracy = running_correct / batch_data_set[phase][1]
             Metrics[phase]["Loss"].append(epoch_loss)
-            Metrics[phase]["Accuracy Metrics"]["ConfusionMatrix"] = confmat.compute()
-            Metrics[phase]["Accuracy Metrics"]["Accuracy"] = epoch_accuracy
+            Metrics[phase]["Metrics"].append(tracker.compute_all())
             if phase == "Validating" and epoch_accuracy > bestAcc:
                 bestAcc = epoch_accuracy
                 torch.save(model.state_dict(), f"./EfficientNetParams{epoch}.pt")
             print(
                 f"""{'='*30}
-                  Finished Epoch: {epoch}/{num_iters}
+                  Finished Epoch: {epoch+1}/{num_iters}
                   Time Taken: {(time.time()-epoch_time)/60:.2f} Minutes
                   Current Loss: {epoch_loss:.4f}
                   Current Accuracy: {epoch_accuracy*100:.2f}%
@@ -144,6 +159,14 @@ def fit_model(
 
     print(f"Total Time Taken: {(time.time() - startTime)/60:.2f} Minutes")
     return model, Metrics
+
+
+def write_stats(subset: dict, label: Literal["train", "val"]) -> None:
+    with open(f"./statistics/efficient_net_{label}.csv", "a") as fp:
+        headers = "Epoch, Loss, Accuracy"
+        for i in subset.keys():
+            headers += ", " + i
+        fp.write(headers + "\n")
 
 
 if __name__ == "__main__":
@@ -158,5 +181,7 @@ if __name__ == "__main__":
     epochs = int(input("Enter The Number Of Epochs: "))
     model, Metrics = fit_model(model, data_loaders, optimizer, criterion, epochs)
     trainMetrics, testMetrics = Metrics["Training"], Metrics["Validating"]
-    print(trainMetrics)
-    print(testMetrics)
+    with open("./statistics/efficient_net_train.json","a") as fp:
+        fp.write(f"{trainMetrics}")
+    with open("./statistics/efficient_net_val.json", "a") as fp:
+        fp.write("testMetrics")

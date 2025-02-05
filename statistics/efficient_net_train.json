@@ -1,0 +1,19 @@
+{
+  "Loss": [0.3242, 0.1541],
+  "Metrics": [
+    {
+      "MulticlassAccuracy": [0.8848],
+      "MulticlassF1Score": [0.8848],
+      "MulticlassAUROC": [0.9781],
+      "MulticlassSpecificity": [0.9616],
+      "MulticlassPrecision": [0.8848]
+    },
+    {
+      "MulticlassAccuracy": [0.8908, 0.9424],
+      "MulticlassF1Score": [0.8908, 0.9424],
+      "MulticlassAUROC": [0.9802, 0.9942],
+      "MulticlassSpecificity": [0.9636, 0.9808],
+      "MulticlassPrecision": [0.8908, 0.9424]
+    }
+  ]
+}
